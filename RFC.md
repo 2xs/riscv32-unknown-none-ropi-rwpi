@@ -67,11 +67,3 @@ The proposed initial scope is intentionally small:
 The intent is to start with an experimental subtarget/profile and validate the
 basic ABI/codegen contract before discussing whether a target triple or a more
 formal ABI surface makes sense.
-
-Questions for feedback:
-1. Would this be acceptable as an experimental subtarget/profile first, before
-   discussing a target triple?
-2. Is there an existing RISC-V lowering mode in LLVM that already overlaps with
-   this goal?
-3. Would the RISC-V maintainers prefer this to start as a target feature, ABI
-   variant, or out-of-tree prototype?
