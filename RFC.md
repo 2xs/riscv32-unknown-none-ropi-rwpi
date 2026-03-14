@@ -64,6 +64,19 @@ The proposed initial scope is intentionally small:
 - no runtime relocation in `.text`,
 - first milestone limited to lowering simple global data accesses via `gp`.
 
+The current prototype scope is also intentionally narrow at the instruction
+selection level.
+
+It only covers direct `gp`-relative `lo12` forms. In theory, those forms use a
+signed 12-bit immediate. In the current prototype, however, `__rwpi_anchor` is
+placed at the beginning of the writable RWPI region and globals are addressed
+as positive offsets from that anchor. This means the usable direct-addressing
+range is currently about 2 KiB of RWPI globals, not the full 4 KiB signed
+window.
+
+This is a prototype limitation, not a fundamental ABI limitation. Larger RWPI
+regions would require additional lowering patterns for out-of-range accesses.
+
 The intent is to start with an experimental subtarget/profile and validate the
 basic ABI/codegen contract before discussing whether a target triple or a more
 formal ABI surface makes sense.

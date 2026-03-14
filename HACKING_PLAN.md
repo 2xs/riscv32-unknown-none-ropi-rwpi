@@ -1,233 +1,154 @@
 # RISC-V `riscv32-unknown-none-ropi-rwpi` Hacking Plan
 
-## Goal
+## Initial plan
 
-Build a minimal compilation profile for RISC-V that matches the FAE execution
-model:
+The initial plan is simple.
+
+We want a minimal RISC-V compilation profile for split flash/RAM bare-metal
+systems.
+
+The target contract is:
 
 - `.text` / `.rom` executes from flash
 - writable runtime data executes from RAM
-- `gp` is the runtime base for relocated writable data
-- no runtime relocation or instruction patching in `.text`
-- runtime relocation is restricted to writable cells
+- `gp` is the runtime base for writable relocated data
+- `.text` is never patched at runtime
+- runtime relocation is restricted to writable memory
 
-This is not ordinary ELF PIC.
-
-This is a dedicated split flash/RAM ABI profile.
-
-## Toolchain chain
-
-The full chain we eventually want is:
+The intended toolchain chain is:
 
 1. Clang frontend
 2. LLVM IR
 3. RISC-V backend lowering
-4. `llc` / integrated codegen
-5. `lld` or GNU linker with a dedicated linker script
-6. `rustc` reusing the same LLVM backend behavior
-7. `build_fae` validating the emitted ELF profile
+4. MC / object emission
+5. `lld`
+6. `rustc` reusing the same LLVM behavior
+7. FAE tooling validating the emitted ELF profile
 
-## Minimal strategy
+The initial implementation strategy is also simple.
 
-Do not start by creating a completely new backend.
+We do not start by writing a new backend. We start by teaching the existing
+RISC-V backend a new profile. The conceptual ABI rule is:
 
-Start by teaching the existing RISC-V backend a new profile:
+- runtime writable data is addressed relative to `gp`
 
-- target name: `riscv32-unknown-none-ropi-rwpi`
-- conceptual ABI rule: all runtime data accesses go through `gp`
+The first expected milestone is small:
 
-The first objective is not completeness.
+- one mutable global lowered to `gp + offset`
+- no `PCREL_*` or `HI20/LO12` used for that access
+- one tiny test proving it
 
-The first objective is to make one simple global data access lower to:
+At that stage, the plan is still mostly about proving that the direction is
+possible.
 
-- `gp + offset`
+## Actual situation
 
-instead of:
+The project is now past that first proof stage.
 
-- `HI20/LO12`
-- `PCREL_HI20/LO12`
-- standard GOT recovery
+There is a working experimental prototype in the local `llvm-project` clone.
+The current branch is:
 
-## Phase 1: LLVM-only proof
+- `riscv32-unknown-none-ropi-rwpi-proposal`
 
-### Deliverable
-
-One tiny C input compiled by Clang to assembly where:
-
-- `gp` is reserved
-- a mutable global is accessed through `gp + offset`
-- `.text` contains no runtime data address formation through PC-relative
-  sequences
-
-### Likely areas to inspect in `llvm-project`
-
-Target backend:
-
-- `llvm/lib/Target/RISCV/`
-
-Key files to inspect first:
-
-- `llvm/lib/Target/RISCV/RISCVISelLowering.cpp`
-- `llvm/lib/Target/RISCV/RISCVISelLowering.h`
-- `llvm/lib/Target/RISCV/RISCVInstrInfo.td`
-- `llvm/lib/Target/RISCV/RISCVSubtarget.{cpp,h}`
-- `llvm/lib/Target/RISCV/RISCVRegisterInfo.{cpp,h}`
-- `llvm/lib/Target/RISCV/RISCVCallingConv.td`
-
-Driver/target parsing:
-
-- `clang/lib/Basic/Targets/RISCV.cpp`
-- `clang/lib/Driver/ToolChains/Clang.cpp`
-
-### First backend changes
-
-1. Add a subtarget feature or ABI knob for the new profile.
-Suggested temporary knob:
-
-- `+fae-gp-data`
-
-2. Reserve `gp` for the profile.
-
-3. Lower selected `GlobalAddress` nodes to a dedicated form meaning:
-
-- runtime data base register is `gp`
-- symbol is represented as an offset in the writable runtime image
-
-4. For the first prototype, support only:
-
-- mutable globals
-- initialized writable globals
-
-5. Forbid or reject for now:
-
-- TLS
-- dynamic linking
-- standard GOT/PLT
-- exotic code models
-
-## Phase 2: Clang-facing profile
-
-### Deliverable
-
-A Clang invocation like:
-
-```bash
-clang --target=riscv32-unknown-none-ropi-rwpi ...
-```
-
-that reaches the new lowering path.
-
-### Work items
-
-1. Decide how the new profile is exposed:
-
-- a true new triple spelling
-- or existing triple + feature/ABI flag
-
-For fast iteration, start with:
-
-- existing RISC-V triple
-- new backend feature / ABI flag
-
-Then add the final spelling once behavior works.
-
-2. Thread the choice through Clang target feature handling.
-
-3. Add a minimal test that checks emitted assembly.
-
-## Phase 3: Link-time shape
-
-### Deliverable
-
-A linked ELF with:
-
-- `.rom`
-- `.rom.ram`
-- `.ram`
-- no forbidden relocations in `.text`
-
-### Work items
-
-1. Provide a dedicated linker script.
-
-2. Ensure emitted writable symbols are organized around the runtime data base
-expected by `gp`.
-
-3. Decide the first out-of-range policy for globals beyond direct `gp` window:
-
-- simplest first option: reject at link/build validation time
-- next option: multi-instruction sequence from `gp`
-
-## Phase 4: Broaden supported access kinds
-
-After mutable globals work, extend in this order:
-
-1. pointer-valued globals
-2. function-pointer globals
-3. constant data referenced via writable pointer cells
-4. larger data models / out-of-range handling
-
-This order matches the pain points found in `try-risc-v`.
-
-## Phase 5: Rust integration
-
-### Deliverable
-
-`rustc` can target the same profile and trigger the same LLVM lowering.
-
-### Likely areas in the Rust tree
-
-- `rust/compiler/rustc_target/src/spec/`
-- `rust/compiler/rustc_codegen_llvm/`
-
-### Work items
-
-1. Add a new target spec for:
+The current profile name is:
 
 - `riscv32-unknown-none-ropi-rwpi`
 
-2. Pass the backend feature / ABI choice to LLVM.
+The experimental backend feature used during the prototype is now:
 
-3. Keep the Rust-side target spec minimal:
+- `+rwpi-gp-data`
 
-- no host OS
-- no dynamic linking
-- explicit relocation model expectations
+The prototype already includes:
 
-## Phase 6: FAE validation
+- experimental RISC-V lowering for selected writable globals via `gp`
+- matching MC support for `%rwpi_lo(...)`
+- experimental RWPI fixups and ELF relocations
+- experimental `lld` support resolving RWPI relocations against
+  `__rwpi_anchor`
+- LLVM tests for code generation
+- LLVM tests for MC / relocations
+- `lld` tests for successful resolution and for missing-anchor failure
 
-Once codegen exists, update the FAE tooling so the profile is enforceable.
+The current prototype also has an important scope limit:
 
-### `build_fae` should validate
+- it only lowers direct RWPI accesses through `lo12` forms
+- `__rwpi_anchor` currently sits at the beginning of the RWPI region
+- globals are therefore addressed as positive offsets from the anchor
+- the practical direct-addressing budget is currently about 2 KiB of RWPI
+  globals
 
-- no runtime-data-targeting relocations in `.text`
-- only allowed relocations in writable sections
-- expected section layout
-- expected machine / ABI profile
+That is a prototype layout choice. It is not the intended long-term ABI limit.
 
-## Immediate next steps
+This changes the status of the project in an important way.
 
-These are the first practical actions to take in order.
+The problem is no longer just:
 
-1. Add a short backend note describing the target contract.
+- "stock GCC/LLVM flags do not get us there"
 
-2. Inspect how `GlobalAddress` is currently lowered in the RISC-V backend.
+It is now:
 
-3. Add a temporary subtarget feature for `fae-gp-data`.
+- "a dedicated LLVM/LLD path exists and works as a prototype"
 
-4. Make one mutable global load/store lower to `gp + offset`.
+At the same time, the prototype is still clearly experimental.
 
-5. Add one LLVM test for the resulting assembly.
+It is not yet an upstreamable ABI surface.
 
-6. Only then expose the profile through Clang.
+What remains intentionally rough:
 
-## Success criteria for the first milestone
+- the feature spelling is still experimental
+- the relocations are still prototype-grade
+- Clang integration is not the main finished entry point yet
+- Rust integration is not done
+- the set of supported access patterns is still narrow compared to a full ABI
+- the long-term shape of target triple vs feature vs ABI flag is still open
 
-The first milestone is reached when all of the following are true:
+So the current state is good enough to prove viability, but not good enough to
+claim that the ABI is finished.
 
-- a tiny C file compiles through Clang/LLVM
-- assembly uses `gp + offset` for writable global access
-- no `HI20/LO12` or `PCREL_*` is used for runtime writable globals
-- the linked ELF keeps `.text` free of runtime data relocation shapes
+## Next milestone
 
-That milestone is enough to prove the backend direction is viable.
+make the prototype easier to understand, easier to reproduce, and easier to
+discuss upstream
+
+In practice, that means:
+
+1. Stabilize the current prototype surface.
+
+- keep the feature naming coherent
+- keep the tests green
+- keep the LLVM and `lld` parts aligned
+
+2. Clarify the user-facing entry point.
+
+- decide whether the next public surface is:
+  - a target feature
+  - a target profile
+  - or an explicit target triple spelling
+
+3. Tighten the documented contract.
+
+- what is RWPI-eligible
+- what is resolved against `__rwpi_anchor`
+- what stays PC-relative
+- what is still unsupported
+- how the current 2 KiB direct-addressing limit follows from the current anchor
+  placement
+- what the out-of-range strategy should become
+
+4. Improve Clang-facing usage.
+
+- make it easy to demonstrate the prototype from a small C file
+- reduce the amount of manual setup needed to reproduce the behavior
+
+The most sensible next expansion are:
+
+- support more access patterns
+- improve the relocation shape
+- improve the public frontend surface
+
+The best next milestone is probably this:
+
+- compile and link a small C example through Clang/LLVM/`lld`
+- using the experimental RWPI path
+- with the resulting ELF and relocations documented
+- and with the unsupported cases stated explicitly
