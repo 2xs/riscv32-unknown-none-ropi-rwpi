@@ -5,14 +5,20 @@ This directory contains small C probes used to check what the current
 
 The observations below matter in a very specific setup:
 
-- `clang -S -emit-llvm`
+- `clang_cc1 -target-feature +rwpi-gp-data`
+- `clang -S`
 - `llc -mattr=+rwpi-gp-data`
 - `llvm-mc`
 - `ld.lld`
 
-This matters because the direct `clang -c` path does not yet expose the same
- behavior for all tested cases. The matrix below therefore describes the
- current prototype capability, not a finished frontend surface.
+The matrix below therefore describes the current prototype capability as
+observed through the backend feature itself.
+
+Important distinction:
+
+- the code generation path already works through `clang_cc1` / `clang -S`
+- the remaining frontend gap is mainly the driver-facing ABI surface
+  (`-frwpi` / `-fropi` / relocation-model plumbing) for RISC-V
 
 ## Summary
 
@@ -125,9 +131,9 @@ Conclusion:
 
 Status:
 
-- supported in the prototype path
+- supported
 
-Observed lowering through `llc`:
+Observed lowering:
 
 - the pointer cell `pg` is accessed through RWPI
 - the data initializer remains a plain relocation in `.data`
@@ -148,21 +154,16 @@ Conclusion:
   prototype
 - the text-side access is RWPI
 - the stored pointer value is resolved through normal data relocation
-
-Important note:
-
-- with direct `clang -c`, this case currently falls back to standard
-  `HI20/LO12` in `.text`
-- the full RWPI behavior is observed through the `IR -> llc -> llvm-mc -> lld`
-  path
+- this behavior is also covered by the direct Clang codegen test for
+  `+rwpi-gp-data`
 
 ### `06_global_function_pointer.c`
 
 Status:
 
-- supported in the prototype path
+- supported
 
-Observed lowering through `llc`:
+Observed lowering:
 
 - the pointer cell `pf` is accessed through RWPI
 - the function pointer initializer remains a plain relocation in `.data`
@@ -184,13 +185,8 @@ Conclusion:
 - the indirect call itself is not the hard part
 - the pointer cell lives naturally in RWPI, while the function target remains
   code-side
-
-Important note:
-
-- with direct `clang -c`, this case currently falls back to standard
-  `HI20/LO12` in `.text`
-- the full RWPI behavior is observed through the `IR -> llc -> llvm-mc -> lld`
-  path
+- this behavior is also covered by the direct Clang codegen test for
+  `+rwpi-gp-data`
 
 ### `07_constant_global.c`
 
@@ -248,7 +244,7 @@ The main gaps are not these simple access patterns anymore.
 
 The main remaining gaps are:
 
-- the direct Clang frontend surface
+- the driver-facing Clang frontend surface for RISC-V ABI flags
 - unsupported symbol classes such as TLS and weak symbols
 - out-of-range accesses beyond the current direct `gp` window
 - broader mixed ROPI/RWPI initialization patterns
