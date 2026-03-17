@@ -25,6 +25,80 @@ The intended toolchain chain is:
 6. `rustc` reusing the same LLVM behavior
 7. FAE tooling validating the emitted ELF profile
 
+## RWPI/ROPI discipline
+
+The project now needs a more explicit translation discipline than the original
+"mutable globals go through `gp`" rule.
+
+The working model is:
+
+- `.text` remains true ROPI code: executable from flash, not patched at
+  runtime
+- not all read-only data is true ROPI data
+- the classification must be driven by relocation semantics, not just by C
+  `const`
+
+The discipline distinguishes three logical classes of global data:
+
+1. True ROPI data
+
+- read-only after link
+- contains no address value that must be fixed up at runtime
+- may stay in flash / execute-in-place storage
+- may be addressed with the normal code-side ROPI mechanisms
+
+2. RWPI data
+
+- writable at runtime
+- relocated independently in the runtime data area
+- addressed relative to `gp`
+
+3. RO-reloc data
+
+- logically read-only for the program
+- but its initializer contains one or more address values that must be fixed up
+  when the image is placed at runtime
+- is therefore not true ROPI data, even if the source language spells it as
+  `const`
+- may need to travel with the relocatable data image
+
+For the current prototype, the important rule is:
+
+- if a global requires runtime relocation of its contents, it must not remain
+  in true ROPI
+
+That includes obvious cases such as:
+
+- read-only pointers to data
+- read-only pointers to functions
+- read-only arrays or structs containing addresses
+- any aggregate whose initializer embeds a relocatable symbol value
+
+This is the key subtlety of the profile.
+
+A global may be read-only from the language point of view and still be
+incompatible with true ROPI placement.
+
+In the current prototype, the simplest implementation strategy is likely:
+
+- keep the logical distinction between RWPI and RO-reloc
+- but allow both classes to be materialized in the same relocatable data image
+  for now
+
+That keeps the semantic model honest while avoiding premature section-design
+complexity.
+
+The classification rules should therefore be read as translation rules:
+
+- writable global -> RWPI
+- read-only global with no runtime-relocatable address in its initializer ->
+  true ROPI
+- read-only global with any runtime-relocatable address in its initializer ->
+  RO-reloc
+- TLS remains outside this discipline for now
+- unsupported symbol classes should be rejected explicitly rather than silently
+  misclassified
+
 The initial implementation strategy is also simple.
 
 We do not start by writing a new backend. We start by teaching the existing
@@ -105,6 +179,13 @@ What remains intentionally rough:
 So the current state is good enough to prove viability, but not good enough to
 claim that the ABI is finished.
 
+This is especially true because the current prototype still needs a systematic
+audit of which global declarations and initializer forms must be classified as:
+
+- true ROPI
+- RWPI
+- RO-reloc
+
 ## Next milestone
 
 make the prototype easier to understand, easier to reproduce, and easier to
@@ -128,6 +209,7 @@ In practice, that means:
 3. Tighten the documented contract.
 
 - what is RWPI-eligible
+- what is RO-reloc and why it is not true ROPI
 - what is resolved against `__rwpi_anchor`
 - what stays PC-relative
 - what is still unsupported
@@ -143,6 +225,7 @@ In practice, that means:
 The most sensible next expansion are:
 
 - support more access patterns
+- make the RWPI/ROPI/RO-reloc classification systematic
 - improve the relocation shape
 - improve the public frontend surface
 

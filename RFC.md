@@ -8,7 +8,7 @@ bare-metal split flash/RAM systems, tentatively named
 
 The target use case is an execution model where:
 - `.text` stays executable in flash without any runtime relocation,
-- writable data is relocated into RAM at startup,
+- relocatable data is moved into its runtime data area at startup,
 - a dedicated base register (`gp`) points to the runtime data area,
 - all runtime data accesses are lowered relative to that base register,
 - function/control-flow addresses may remain PC-relative as usual.
@@ -27,7 +27,7 @@ flash and RAM regions per application.
 
 In that environment, it is useful to support an ABI where:
 - code is relocatable within executable storage,
-- writable data is relocatable independently within RAM,
+- relocatable data is relocatable independently within RAM,
 - code does not require runtime relocation in `.text`,
 - runtime data accesses go through a dedicated base register initialized by the
   startup/runtime.
@@ -55,6 +55,59 @@ profile where writable globals are addressed relative to a stable runtime base
 (`gp`), while code remains independently relocatable and does not require
 runtime relocation in `.text`.
 
+## RWPI/ROPI discipline
+
+The profile needs a stricter classification rule than "mutable globals are
+RWPI".
+
+The important distinction is between:
+
+- true ROPI data
+- RWPI data
+- read-only data whose contents still require runtime relocation
+
+The proposed discipline is:
+
+1. True ROPI data
+
+- read-only after link
+- contains no address value that must be fixed up at runtime
+- may remain in flash alongside code-side read-only data
+
+2. RWPI data
+
+- writable at runtime
+- relocated in the runtime data image
+- addressed relative to `gp`
+
+3. RO-reloc data
+
+- logically read-only to the program
+- but its initializer contains address-bearing values that must be fixed up
+  when the image is placed at runtime
+- is therefore not true ROPI, even if it originates from source-level `const`
+
+This third class matters because not every read-only object is safe to leave in
+flash unchanged.
+
+Examples include:
+
+- read-only pointers
+- read-only arrays of pointers
+- read-only aggregates containing function or data addresses
+
+Under this discipline:
+
+- writable globals lower as RWPI
+- read-only globals with no runtime-relocatable address in their initializer
+  remain true ROPI
+- read-only globals with any runtime-relocatable address in their initializer
+  are classified as RO-reloc
+
+In an implementation, RO-reloc may initially share the same physical
+relocatable data image as RWPI, while remaining a distinct logical class in the
+ABI rules.
+
 ## Proposal
 
 The proposed initial scope is intentionally small:
@@ -63,6 +116,13 @@ The proposed initial scope is intentionally small:
 - no TLS,
 - no runtime relocation in `.text`,
 - first milestone limited to lowering simple global data accesses via `gp`.
+
+The same initial scope also implies:
+
+- unsupported symbol classes should be rejected or left on existing lowering
+  paths explicitly
+- no object that requires runtime relocation of its contents should be treated
+  as true ROPI by accident
 
 The current prototype scope is also intentionally narrow at the instruction
 selection level.
