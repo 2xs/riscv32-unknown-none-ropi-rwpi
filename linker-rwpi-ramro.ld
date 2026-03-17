@@ -16,6 +16,7 @@ SECTIONS {
   } > ROM
 
   __gp_data_start = ORIGIN(RAM);
+  __stack_top = ORIGIN(RAM) + LENGTH(RAM);
   /* If the final image retains runtime relocations with --emit-relocs,
      the associated RO-reloc table remains the natural ELF section
      .rela.dataramro. */
@@ -48,6 +49,12 @@ SECTIONS {
     *(COMMON)
     __datarw_bss_end = .;
   } > RAM
+
+  .rela.dataramro : {
+    *(.rela.dataramro .rela.dataramro.*)
+  } > ROM
+  __rela_dataramro_start = ADDR(.rela.dataramro);
+  __rela_dataramro_end = ADDR(.rela.dataramro) + SIZEOF(.rela.dataramro);
 
   __gp_data_end = .;
   __image_end = LOADADDR(.datarw) + SIZEOF(.datarw);
