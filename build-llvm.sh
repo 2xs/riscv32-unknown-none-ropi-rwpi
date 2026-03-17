@@ -6,15 +6,18 @@ LLVM_DIR="$ROOT/llvm-project"
 BUILD_DIR="$ROOT/build-rwpi-moved"
 LLVM_REPO="git@github.com:2xs/llvm-project.git"
 LLVM_BRANCH="riscv32-unknown-none-ropi-rwpi-proposal"
+LLVM_SOURCE_DIR="$LLVM_DIR/llvm"
 
 if [ ! -d "$LLVM_DIR/.git" ]; then
   git clone --branch "$LLVM_BRANCH" "$LLVM_REPO" "$LLVM_DIR"
 fi
 
-if [ ! -d "$BUILD_DIR" ]; then
-  echo "missing build directory: $BUILD_DIR" >&2
-  echo "configure it first, then rerun build-llvm.sh" >&2
-  exit 1
+if [ ! -f "$BUILD_DIR/build.ninja" ]; then
+  cmake -G Ninja -S "$LLVM_SOURCE_DIR" -B "$BUILD_DIR" \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DLLVM_ENABLE_ASSERTIONS=ON \
+    -DLLVM_ENABLE_PROJECTS="clang;lld" \
+    -DLLVM_TARGETS_TO_BUILD=RISCV
 fi
 
 cd "$BUILD_DIR"
