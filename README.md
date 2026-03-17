@@ -14,17 +14,29 @@ Useful links:
 The current prototype focuses on direct RWPI accesses lowered relative to
 `gp`.
 
-The implemented instruction forms are currently `lo12`-based direct accesses.
-In theory, those forms use a signed 12-bit immediate around `gp`. In practice,
-the current prototype places `__gp_data_start` at the beginning of the writable
-RWPI region and addresses globals as positive offsets from that anchor.
+The current compiler lowering no longer tries to choose between a short
+`gp + lo12` form and a larger out-of-range form.
 
-This means the prototype currently provides about 2 KiB of directly addressable
-RWPI globals, not the full 4 KiB signed window that would be available with a
-symmetric layout around `gp`.
+Instead, RWPI-eligible addresses are materialized systematically as a full
+`gp`-relative address:
 
-This is a prototype implementation choice. It is not intended to define the
-long-term ABI limit.
+```asm
+lui   t0, %rwpi_hi(symbol)
+add   t0, gp, t0
+addi  t0, t0, %rwpi_lo(symbol)
+```
+
+Loads and stores then use that materialized address.
+
+This means:
+
+- the compiler does not need to know the final linked offset of the symbol
+- out-of-range RWPI accesses beyond the signed 12-bit `lo12` window work
+- the short `gp + lo12` form is still valid in hand-written assembly when the
+  author chooses it explicitly
+
+In other words, the compiler currently always emits the robust full form for
+RWPI data, and does not perform a "short form if possible" optimization.
 
 ## Minimum example
 
@@ -73,14 +85,30 @@ ask the experimental `clang` for assembly:
 ./build-rwpi-moved/bin/clang -target riscv32-unknown-elf -march=rv32imac -mabi=ilp32 -frwpi -S ./experiments/rwpi_probe_plain.c -o -
 ```
 
-You should see `gp`-relative accesses such as `%rwpi_lo(...)`.
+You should see `gp`-relative accesses built from `%rwpi_hi(...)` and
+`%rwpi_lo(...)`.
 
 ## About `objdump`
 
 A generic host `objdump` may not understand this RISC-V ELF at all.
 
-Even when a tool does understand RISC-V ELF, object files that still contain
-the prototype's custom RWPI relocations are a separate question.
+For RWPI object files, use the LLVM tools built in `build-rwpi-moved/bin`.
 
-In practice, the most direct way to inspect the prototype remains the
-`clang -S` command above.
+Example:
+
+```sh
+./build-rwpi-moved/bin/clang -target riscv32-unknown-elf -march=rv32imac -mabi=ilp32 -frwpi -c ./experiments/rwpi_probe_plain.c -o /tmp/rwpi-probe.o
+./build-rwpi-moved/bin/llvm-objdump -dr --no-show-raw-insn -M no-aliases /tmp/rwpi-probe.o
+./build-rwpi-moved/bin/llvm-readobj -r /tmp/rwpi-probe.o
+```
+
+This shows both:
+
+- the `gp`-relative instructions in `.text`
+- the custom RWPI relocations such as `R_RISCV_CUSTOM194` and
+  `R_RISCV_CUSTOM192`
+
+So, in practice:
+
+- use `clang -S` to inspect source-level code generation
+- use `llvm-objdump -dr` and `llvm-readobj -r` to inspect RWPI `.o` files

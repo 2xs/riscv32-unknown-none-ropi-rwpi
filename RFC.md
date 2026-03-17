@@ -118,9 +118,9 @@ This implies that RO-reloc and RWPI share the same `gp`-relative addressing
 discipline in generated code, but not necessarily the same final memory
 protection or linker output region.
 
-The current prototype may temporarily materialize RO-reloc in a generic
-relocatable data section such as `.data.rel.ro`, but the ABI intent is a
-distinct `ramro`-style output region in the final image.
+The current prototype now materializes RO-reloc through a dedicated `.ramro`
+input-section convention, with the linker script expected to map it into a
+distinct RAM read-only output region in the final image.
 
 ## Proposal
 
@@ -138,18 +138,31 @@ The same initial scope also implies:
 - no object that requires runtime relocation of its contents should be treated
   as true ROPI by accident
 
-The current prototype scope is also intentionally narrow at the instruction
-selection level.
+The current prototype scope is still intentionally narrow at the instruction
+selection level, but it is no longer limited to direct `gp`-relative `lo12`
+forms.
 
-It only covers direct `gp`-relative `lo12` forms. In theory, those forms use a
-signed 12-bit immediate. In the current prototype, however, `__gp_data_start` is
-placed at the beginning of the writable RWPI region and globals are addressed
-as positive offsets from that anchor. This means the usable direct-addressing
-range is currently about 2 KiB of RWPI globals, not the full 4 KiB signed
-window.
+The current compiler lowering systematically materializes RWPI addresses with a
+full `gp`-relative sequence:
 
-This is a prototype limitation, not a fundamental ABI limitation. Larger RWPI
-regions would require additional lowering patterns for out-of-range accesses.
+- `lui %rwpi_hi(symbol)`
+- `add ..., gp, ...`
+- `addi/load/store ..., %rwpi_lo(symbol)`
+
+This is an intentional prototype choice.
+
+The compiler does not try to predict whether a given symbol will end up within a
+signed 12-bit offset from `__gp_data_start` after link. Instead, it always emits
+the robust full-address form for RWPI-generated code. This avoids making code
+generation depend on final linker placement.
+
+As a consequence:
+
+- out-of-range RWPI accesses are supported by the compiler and linker path
+- the short `gp + lo12` form remains available only when written explicitly,
+  for example in hand-written assembly
+- a future optimization may reintroduce an automatic short-form selection, but
+  that is not part of the current prototype contract
 
 The intent is to start with an experimental subtarget/profile and validate the
 basic ABI/codegen contract before discussing whether a target triple or a more

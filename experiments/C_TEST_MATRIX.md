@@ -17,8 +17,8 @@ observed through the backend feature itself.
 Important distinction:
 
 - the code generation path already works through `clang_cc1` / `clang -S`
-- the remaining frontend gap is mainly the driver-facing ABI surface
-  (`-frwpi` / `-fropi` / relocation-model plumbing) for RISC-V
+- the driver-facing `-frwpi` surface for RISC-V is also wired up now
+- this matrix is therefore mostly about backend behavior and emitted code shape
 
 ## Summary
 
@@ -41,8 +41,14 @@ Still not covered by this matrix:
 - TLS
 - weak symbols
 - address spaces other than 0
-- out-of-range RWPI accesses
 - more complex mixed ROPI/RWPI initializer patterns
+
+Note:
+
+- out-of-range RWPI accesses are now covered by dedicated LLVM/LLD tests using
+  the full `%rwpi_hi` / `%rwpi_lo` sequence
+- this matrix still focuses on small C probes, not on far-placement linker
+  stress cases
 
 ## Detailed results
 
@@ -54,9 +60,9 @@ Status:
 
 Observed lowering:
 
-- `&g` lowers to `addi a0, gp, %rwpi_lo(g)`
-- `load g` lowers to `lw a0, %rwpi_lo(g)(gp)`
-- `store g` lowers to `sw a0, %rwpi_lo(g)(gp)`
+- `&g` lowers through a full RWPI address materialization
+- direct loads/stores use the same `%rwpi_hi` / `%rwpi_lo` base
+- exact instruction shape may differ slightly between SDAG and GlobalISel
 
 Conclusion:
 
@@ -76,8 +82,9 @@ Observed lowering:
 
 Observed example:
 
-- `addi a0, gp, %rwpi_lo(g)`
-- `lw a0, 8(a0)`
+- `lui a0, %rwpi_hi(g)`
+- `add a0, gp, a0`
+- local constant indexing is then applied from that base
 
 Conclusion:
 
@@ -98,7 +105,7 @@ Observed lowering:
 Observed example:
 
 - `slli a0, a0, 2`
-- `addi a1, gp, %rwpi_lo(g)`
+- RWPI base address materialization for `g`
 - `add a0, a0, a1`
 - `lw a0, 0(a0)`
 
@@ -120,7 +127,7 @@ Observed lowering:
 
 Observed example:
 
-- `addi a0, gp, %rwpi_lo(g)`
+- RWPI base address materialization for `g`
 - `lw a0, 4(a0)`
 
 Conclusion:
@@ -140,12 +147,14 @@ Observed lowering:
 
 Observed relocations in the object:
 
+- `.rela.text`: `R_RISCV_CUSTOM194 pg`
 - `.rela.text`: `R_RISCV_CUSTOM192 pg`
 - `.rela.data`: `R_RISCV_32 target`
 
 Observed linked code:
 
-- `lw a0, 0x4(gp)`
+- RWPI base materialization for `pg`
+- `lw a0, %rwpi_lo(pg)(base)`
 - `lw a0, 0(a0)`
 
 Conclusion:
@@ -170,12 +179,14 @@ Observed lowering:
 
 Observed relocations in the object:
 
+- `.rela.text`: `R_RISCV_CUSTOM194 pf`
 - `.rela.text`: `R_RISCV_CUSTOM192 pf`
 - `.rela.data`: `R_RISCV_32 f`
 
 Observed linked code:
 
-- `lw a5, 0x0(gp)`
+- RWPI base materialization for `pf`
+- `lw a5, %rwpi_lo(pf)(base)`
 - `jr a5`
 
 Conclusion:
@@ -221,8 +232,8 @@ Status:
 
 Observed lowering:
 
-- standard `HI20/LO12`
-- no `%rwpi_lo`
+- standard non-RWPI addressing
+- no `%rwpi_hi` / `%rwpi_lo`
 
 Conclusion:
 
@@ -244,7 +255,5 @@ The main gaps are not these simple access patterns anymore.
 
 The main remaining gaps are:
 
-- the driver-facing Clang frontend surface for RISC-V ABI flags
 - unsupported symbol classes such as TLS and weak symbols
-- out-of-range accesses beyond the current direct `gp` window
 - broader mixed ROPI/RWPI initialization patterns

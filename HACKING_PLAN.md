@@ -93,14 +93,14 @@ addresses them. Both are expected to use the same `gp`-relative discipline in
 generated code. The distinction is about final placement, relocation handling,
 and memory protection.
 
-The current prototype still uses the simplest intermediate materialization:
+The current prototype now has a concrete intermediate materialization:
 
 - keep the logical distinction between RWPI and RO-reloc
-- allow both classes to flow through a generic relocatable-data representation
-  for now
+- materialize RO-reloc through a dedicated `.ramro` input-section convention
+- keep both classes within the same `gp`-addressable runtime data window
 
-That keeps the semantic model honest while postponing the final linker-section
-split.
+That keeps the semantic model honest while giving the linker and startup code a
+real section contract to target.
 
 The classification rules should therefore be read as translation rules:
 
@@ -149,23 +149,29 @@ The experimental backend feature used during the prototype is now:
 The prototype already includes:
 
 - experimental RISC-V lowering for selected writable globals via `gp`
-- matching MC support for `%rwpi_lo(...)`
+- matching MC support for `%rwpi_hi(...)` / `%rwpi_lo(...)`
 - experimental RWPI fixups and ELF relocations
 - experimental `lld` support resolving RWPI relocations against
   `__gp_data_start`
 - LLVM tests for code generation
 - LLVM tests for MC / relocations
-- `lld` tests for successful resolution and for missing-anchor failure
+- `lld` tests for successful resolution and for missing-`__gp_data_start`
+  failure
 
-The current prototype also has an important scope limit:
+The current prototype also has an important codegen policy:
 
-- it only lowers direct RWPI accesses through `lo12` forms
-- `__gp_data_start` currently sits at the beginning of the RWPI region
-- globals are therefore addressed as positive offsets from the anchor
-- the practical direct-addressing budget is currently about 2 KiB of RWPI
-  globals
+- the compiler now always materializes RWPI addresses through a full
+  `gp + %rwpi_hi/%rwpi_lo` sequence
+- it does not try to decide at compile time whether a shorter direct `gp +
+  lo12` form would be sufficient after final link
+- the short form remains valid when written explicitly in assembly, but it is
+  not currently selected automatically by the compiler
 
-That is a prototype layout choice. It is not the intended long-term ABI limit.
+This is an intentional prototype choice.
+
+It avoids making compiler code generation depend on final linker placement, and
+it removes the earlier practical 2 KiB limit that came from a `lo12`-only
+implementation.
 
 This changes the status of the project in an important way.
 
@@ -227,9 +233,9 @@ In practice, that means:
 - what is resolved against `__gp_data_start`
 - what stays PC-relative
 - what is still unsupported
-- how the current 2 KiB direct-addressing limit follows from the current anchor
-  placement
-- what the out-of-range strategy should become
+- why the compiler currently always emits the full `gp + %rwpi_hi/%rwpi_lo`
+  form
+- whether a future short-form optimization is desirable
 
 4. Improve Clang-facing usage.
 
@@ -257,8 +263,7 @@ The expected impact is:
 1. Input section policy
 
 - the backend needs a stable input-section convention for RO-reloc data
-- the current use of generic `.data.rel.ro` is acceptable as a temporary
-  materialization
+- the current prototype uses `.ramro` for that role
 - the target ABI intent is a distinct logical `ramro` class
 
 2. Linker script / output section policy
