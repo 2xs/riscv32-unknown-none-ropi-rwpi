@@ -36,7 +36,35 @@ This means:
   author chooses it explicitly
 
 In other words, the compiler currently always emits the robust full form for
-RWPI data, and does not perform a "short form if possible" optimization.
+RWPI data, and does not perform a "short form if possible" optimization by
+itself.
+
+However, the linker now performs a targeted RWPI relaxation when possible.
+
+If `lld` sees the full compiler-emitted pattern and the final offset from
+`__gp_data_start` fits in a signed 12-bit immediate, it can shrink:
+
+```asm
+lui   t0, %rwpi_hi(symbol)
+add   t0, gp, t0
+addi  t0, t0, %rwpi_lo(symbol)
+```
+
+into:
+
+```asm
+addi  t0, gp, imm12
+```
+
+Likewise, a full-address load/store sequence can be relaxed back to
+`lw/sw ... imm12(gp)`.
+
+So the current model is:
+
+- the compiler always emits the safe full form
+- `lld` relaxes it to the short `gp + imm12` form when the final placement
+  allows it
+- hand-written assembly may still use either form explicitly
 
 ## Minimum example
 
@@ -85,8 +113,11 @@ ask the experimental `clang` for assembly:
 ./build-rwpi-moved/bin/clang -target riscv32-unknown-elf -march=rv32imac -mabi=ilp32 -frwpi -S ./experiments/rwpi_probe_plain.c -o -
 ```
 
-You should see `gp`-relative accesses built from `%rwpi_hi(...)` and
-`%rwpi_lo(...)`.
+In the `.s` output, you should see `gp`-relative accesses built from
+`%rwpi_hi(...)` and `%rwpi_lo(...)`.
+
+After final link, some of those sequences may have been relaxed by `lld` back
+to shorter `gp + imm12` instructions.
 
 ## About `objdump`
 

@@ -156,13 +156,19 @@ signed 12-bit offset from `__gp_data_start` after link. Instead, it always emits
 the robust full-address form for RWPI-generated code. This avoids making code
 generation depend on final linker placement.
 
+The linker may then optimize that full form back into a short `gp + imm12`
+form when the final linked displacement is in range and the emitted pattern is
+recognized as relaxable. This keeps the compiler rule simple while still
+recovering compact code where layout permits it.
+
 As a consequence:
 
 - out-of-range RWPI accesses are supported by the compiler and linker path
-- the short `gp + lo12` form remains available only when written explicitly,
-  for example in hand-written assembly
-- a future optimization may reintroduce an automatic short-form selection, but
-  that is not part of the current prototype contract
+- the compiler does not depend on final linker placement
+- `lld` can recover the short `gp + lo12` form automatically for in-range
+  cases
+- the short form also remains available when written explicitly, for example
+  in hand-written assembly
 
 The intent is to start with an experimental subtarget/profile and validate the
 basic ABI/codegen contract before discussing whether a target triple or a more

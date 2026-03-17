@@ -153,6 +153,8 @@ The prototype already includes:
 - experimental RWPI fixups and ELF relocations
 - experimental `lld` support resolving RWPI relocations against
   `__gp_data_start`
+- experimental `lld` relaxation from full RWPI address materialization back to
+  `gp + imm12` when the final displacement is in range
 - LLVM tests for code generation
 - LLVM tests for MC / relocations
 - `lld` tests for successful resolution and for missing-`__gp_data_start`
@@ -164,14 +166,16 @@ The current prototype also has an important codegen policy:
   `gp + %rwpi_hi/%rwpi_lo` sequence
 - it does not try to decide at compile time whether a shorter direct `gp +
   lo12` form would be sufficient after final link
-- the short form remains valid when written explicitly in assembly, but it is
-  not currently selected automatically by the compiler
+- `lld` may later relax that full form back to a direct `gp + lo12` form when
+  the final displacement is in range
+- the short form remains valid when written explicitly in assembly
 
 This is an intentional prototype choice.
 
 It avoids making compiler code generation depend on final linker placement, and
 it removes the earlier practical 2 KiB limit that came from a `lo12`-only
-implementation.
+implementation while still recovering compact encodings after link when
+possible.
 
 This changes the status of the project in an important way.
 
@@ -235,7 +239,7 @@ In practice, that means:
 - what is still unsupported
 - why the compiler currently always emits the full `gp + %rwpi_hi/%rwpi_lo`
   form
-- whether a future short-form optimization is desirable
+- how and when `lld` relaxes that form back to `gp + lo12`
 
 4. Improve Clang-facing usage.
 
