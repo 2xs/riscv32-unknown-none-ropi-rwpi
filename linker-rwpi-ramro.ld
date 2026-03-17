@@ -10,43 +10,47 @@ SECTIONS {
     *(.text .text.*)
   } > ROM
 
-  .rodata : {
+  .dataro : {
     *(.rodata .rodata.*)
     *(.srodata .srodata.*)
   } > ROM
 
   __gp_data_start = ORIGIN(RAM);
+  /* If the final image retains runtime relocations with --emit-relocs,
+     the associated RO-reloc table remains the natural ELF section
+     .rela.dataramro. */
 
-  .ramro __gp_data_start : ALIGN(4) {
+  .dataramro __gp_data_start : ALIGN(4) {
     . = ALIGN(4);
-    __ramro_start = .;
+    __dataramro_start = .;
+    *(.dataramro .dataramro.*)
     *(.ramro .ramro.*)
-    __ramro_end = .;
+    __dataramro_end = .;
   } > RAM AT> ROM
-  __ramro_load_start = LOADADDR(.ramro);
-  __ramro_load_end = LOADADDR(.ramro) + SIZEOF(.ramro);
+  __dataramro_load_start = LOADADDR(.dataramro);
+  __dataramro_load_end = LOADADDR(.dataramro) + SIZEOF(.dataramro);
 
-  .rwpi : ALIGN(4) {
+  .datarw : ALIGN(4) {
     . = ALIGN(4);
-    __rwpi_data_start = .;
+    __datarw_start = .;
     *(.data .data.*)
     *(.sdata .sdata.*)
-    __rwpi_data_end = .;
+    __datarw_end = .;
   } > RAM AT> ROM
-  __rwpi_data_load_start = LOADADDR(.rwpi);
-  __rwpi_data_load_end = LOADADDR(.rwpi) + SIZEOF(.rwpi);
+  __datarw_load_start = LOADADDR(.datarw);
+  __datarw_load_end = LOADADDR(.datarw) + SIZEOF(.datarw);
 
-  .rwpi.bss (NOLOAD) : ALIGN(4) {
+  .datarw.bss (NOLOAD) : ALIGN(4) {
     . = ALIGN(4);
-    __rwpi_bss_start = .;
+    __datarw_bss_start = .;
     *(.sbss .sbss.*)
     *(.bss .bss.*)
     *(COMMON)
-    __rwpi_bss_end = .;
+    __datarw_bss_end = .;
   } > RAM
 
   __gp_data_end = .;
-  __image_end = LOADADDR(.rwpi) + SIZEOF(.rwpi);
+  __image_end = LOADADDR(.datarw) + SIZEOF(.datarw);
 
   /DISCARD/ : {
     *(.note.GNU-stack)

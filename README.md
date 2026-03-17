@@ -15,13 +15,14 @@ The intended ABI naming is now:
 
 - `dataro` for true read-only data that stays in ROM
 - `dataramro` for RO-reloc data copied to RAM then treated as read-only
-- `dataramro.rel` for the runtime relocation table consumed by `crt0` for
-  `dataramro`
+- `.rela.dataramro` for the standard ELF `SHT_RELA` relocation table consumed
+  by `crt0` for `dataramro`
 - `datarw` for writable runtime data
 - `datarw.bss` for zero-initialized writable runtime data
 
 The current prototype implementation still uses some transitional ELF section
-names such as `.rodata`, `.ramro`, `.data`, and `.bss`.
+names such as `.rodata`, `.data`, and `.bss`, but RO-reloc data now already
+uses `.dataramro`.
 
 Those current names should be read as implementation detail. The intended ABI
 contract is the `data*` family above.
@@ -97,38 +98,44 @@ RWPI-linked ELF to `./example.elf`.
 
 The link step uses the reference linker script
 [linker-rwpi-ramro.ld](/Users/gilles/Documents/Code/backend-riscv32-unknown-none-ropi-rwpi/linker-rwpi-ramro.ld).
-It models the intended split using the current prototype names:
+It models the intended split with the target naming:
 
-- `.text` / `.rodata` in ROM
-- `.ramro` first in the `gp`-addressable RAM window
-- `.rwpi` writable initialized data after `.ramro`
-- `.rwpi.bss` as the zero-init tail of the same runtime data window
+- `.text` / `.dataro` in ROM
+- `.dataramro` first in the `gp`-addressable RAM window
+- `.datarw` writable initialized data after `.dataramro`
+- `.datarw.bss` as the zero-init tail of the same runtime data window
 
 In terms of the target ABI naming above, that corresponds to:
 
 - `.rodata` -> `dataro`
-- `.ramro` -> `dataramro`
-- `.rwpi` -> `datarw`
-- `.rwpi.bss` -> `datarw.bss`
+- `.dataramro` -> `dataramro`
+- `.data` -> `datarw`
+- `.bss` -> `datarw.bss`
 
 The script also exposes the startup-facing symbols:
 
 - `__gp_data_start`
-- `__ramro_start`, `__ramro_end`, `__ramro_load_start`
-- `__rwpi_data_start`, `__rwpi_data_end`, `__rwpi_data_load_start`
-- `__rwpi_bss_start`, `__rwpi_bss_end`
+- `__dataramro_start`, `__dataramro_end`, `__dataramro_load_start`
+- `__datarw_start`, `__datarw_end`, `__datarw_load_start`
+- `__datarw_bss_start`, `__datarw_bss_end`
 
 `__gp_data_start` is the linker-script symbol at the start of the runtime `gp`
 window. It does not rely on a synthetic object being emitted by the input
 files.
 
+For RO-reloc contents, the associated runtime relocation table is not renamed
+to a custom ABI section. The linker keeps the natural ELF relocation section
+name `.rela.dataramro` when relocations are retained in the output with
+`--emit-relocs`.
+
 The intended `crt0` sequence is:
 
-1. copy `.ramro` from `__ramro_load_start` to `__ramro_start`
-2. copy `.rwpi` from `__rwpi_data_load_start` to `__rwpi_data_start`
-3. zero `.rwpi.bss`
-4. initialize `gp` from `__gp_data_start`
-5. optionally make `.ramro` read-only once relocations and initialization are done
+1. copy `.dataramro` from `__dataramro_load_start` to `__dataramro_start`
+2. copy `.datarw` from `__datarw_load_start` to `__datarw_start`
+3. zero `.datarw.bss`
+4. apply the `Elf32_Rela` entries from `.rela.dataramro` to `.dataramro`
+5. initialize `gp` from `__gp_data_start`
+6. optionally make `.dataramro` read-only once relocations and initialization are done
 
 If you want to observe the generated RWPI code directly, the simplest way is to
 ask the experimental `clang` for assembly:

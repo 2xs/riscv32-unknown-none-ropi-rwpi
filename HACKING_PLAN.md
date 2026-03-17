@@ -92,7 +92,7 @@ The intended ABI naming for those runtime classes is:
 
 - `dataro`
 - `dataramro`
-- `dataramro.rel`
+- `.rela.dataramro`
 - `datarw`
 - `datarw.bss`
 
@@ -110,9 +110,9 @@ The current prototype now has a concrete intermediate materialization:
 That keeps the semantic model honest while giving the linker and startup code a
 real section contract to target.
 
-For now, the implementation still uses transitional ELF names like `.ramro`,
-`.data`, and `.bss`. The long-term ABI naming should converge on the `data*`
-family above.
+For now, the implementation still uses transitional writable-data ELF names
+like `.data` and `.bss`, but RO-reloc data now already uses `.dataramro`.
+The long-term ABI naming should converge fully on the `data*` family above.
 
 The classification rules should therefore be read as translation rules:
 
@@ -279,9 +279,9 @@ The expected impact is:
 1. Input section policy
 
 - the backend needs a stable input-section convention for RO-reloc data
-- the current prototype uses `.ramro` for that role
+- the current prototype uses `.dataramro` for that role
 - the target ABI intent is a distinct `dataramro` class plus a
-  `dataramro.rel` relocation table
+  `.rela.dataramro` relocation table
 
 2. Linker script / output section policy
 
@@ -296,8 +296,8 @@ The expected impact is:
 
 - startup code must copy or initialize RWPI into RAM as usual
 - startup code must also copy RO-reloc into its RAM destination
-- startup code must apply the required runtime relocations before handing
-  control to the program
+- startup code must apply the required runtime relocations from
+  `.rela.dataramro` before handing control to the program
 - if the platform provides MPU/MMU protection, startup may then mark the RO-reloc
   region read-only
 
