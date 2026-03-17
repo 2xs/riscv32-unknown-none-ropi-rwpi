@@ -86,6 +86,9 @@ The proposed discipline is:
 - but its initializer contains address-bearing values that must be fixed up
   when the image is placed at runtime
 - is therefore not true ROPI, even if it originates from source-level `const`
+- is copied into a dedicated runtime RAM read-only region
+- is addressed relative to `gp`, like RWPI data
+- may be made read-only by the runtime after relocation has completed
 
 This third class matters because not every read-only object is safe to leave in
 flash unchanged.
@@ -104,9 +107,20 @@ Under this discipline:
 - read-only globals with any runtime-relocatable address in their initializer
   are classified as RO-reloc
 
-In an implementation, RO-reloc may initially share the same physical
-relocatable data image as RWPI, while remaining a distinct logical class in the
-ABI rules.
+The intended runtime memory contract is therefore:
+
+- true ROPI stays in flash / execute-in-place storage
+- RWPI is copied or initialized into writable RAM
+- RO-reloc is copied into a distinct RAM read-only region, relocated there, and
+  then left read-only for the program
+
+This implies that RO-reloc and RWPI share the same `gp`-relative addressing
+discipline in generated code, but not necessarily the same final memory
+protection or linker output region.
+
+The current prototype may temporarily materialize RO-reloc in a generic
+relocatable data section such as `.data.rel.ro`, but the ABI intent is a
+distinct `ramro`-style output region in the final image.
 
 ## Proposal
 
