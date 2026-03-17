@@ -1,5 +1,7 @@
 llvm-project/
 rust/
+!experiments/rust/
+!experiments/rust/**
 build-rwpi/
 build-rwpi-moved/
 .DS_Store
