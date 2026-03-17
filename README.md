@@ -16,7 +16,7 @@ The current prototype focuses on direct RWPI accesses lowered relative to
 
 The implemented instruction forms are currently `lo12`-based direct accesses.
 In theory, those forms use a signed 12-bit immediate around `gp`. In practice,
-the current prototype places `__rwpi_anchor` at the beginning of the writable
+the current prototype places `__gp_data_start` at the beginning of the writable
 RWPI region and addresses globals as positive offsets from that anchor.
 
 This means the prototype currently provides about 2 KiB of directly addressable
@@ -37,6 +37,34 @@ From the repository root:
 
 This builds `clang` and `lld` in `build-rwpi-moved/`, then writes a minimal
 RWPI-linked ELF to `./example.elf`.
+
+The link step uses the reference linker script
+[linker-rwpi-ramro.ld](/Users/gilles/Documents/Code/backend-riscv32-unknown-none-ropi-rwpi/linker-rwpi-ramro.ld).
+It models the intended split:
+
+- `.text` / `.rodata` in ROM
+- `.ramro` first in the `gp`-addressable RAM window
+- `.rwpi` writable initialized data after `.ramro`
+- `.rwpi.bss` as the zero-init tail of the same runtime data window
+
+The script also exposes the startup-facing symbols:
+
+- `__gp_data_start`
+- `__ramro_start`, `__ramro_end`, `__ramro_load_start`
+- `__rwpi_data_start`, `__rwpi_data_end`, `__rwpi_data_load_start`
+- `__rwpi_bss_start`, `__rwpi_bss_end`
+
+`__gp_data_start` is the linker-script symbol at the start of the runtime `gp`
+window. It does not rely on a synthetic object being emitted by the input
+files.
+
+The intended `crt0` sequence is:
+
+1. copy `.ramro` from `__ramro_load_start` to `__ramro_start`
+2. copy `.rwpi` from `__rwpi_data_load_start` to `__rwpi_data_start`
+3. zero `.rwpi.bss`
+4. initialize `gp` from `__gp_data_start`
+5. optionally make `.ramro` read-only once relocations and initialization are done
 
 If you want to observe the generated RWPI code directly, the simplest way is to
 ask the experimental `clang` for assembly:

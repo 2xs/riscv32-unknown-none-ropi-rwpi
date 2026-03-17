@@ -152,7 +152,7 @@ The prototype already includes:
 - matching MC support for `%rwpi_lo(...)`
 - experimental RWPI fixups and ELF relocations
 - experimental `lld` support resolving RWPI relocations against
-  `__rwpi_anchor`
+  `__gp_data_start`
 - LLVM tests for code generation
 - LLVM tests for MC / relocations
 - `lld` tests for successful resolution and for missing-anchor failure
@@ -160,7 +160,7 @@ The prototype already includes:
 The current prototype also has an important scope limit:
 
 - it only lowers direct RWPI accesses through `lo12` forms
-- `__rwpi_anchor` currently sits at the beginning of the RWPI region
+- `__gp_data_start` currently sits at the beginning of the RWPI region
 - globals are therefore addressed as positive offsets from the anchor
 - the practical direct-addressing budget is currently about 2 KiB of RWPI
   globals
@@ -224,7 +224,7 @@ In practice, that means:
 
 - what is RWPI-eligible
 - what is RO-reloc and why it is not true ROPI
-- what is resolved against `__rwpi_anchor`
+- what is resolved against `__gp_data_start`
 - what stays PC-relative
 - what is still unsupported
 - how the current 2 KiB direct-addressing limit follows from the current anchor

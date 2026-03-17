@@ -1,4 +1,3 @@
-__attribute__((section(".rwpi"))) unsigned char __rwpi_anchor = 0;
 int g = 42;
 int z;
 

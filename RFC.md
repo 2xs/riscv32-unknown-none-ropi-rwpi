@@ -142,7 +142,7 @@ The current prototype scope is also intentionally narrow at the instruction
 selection level.
 
 It only covers direct `gp`-relative `lo12` forms. In theory, those forms use a
-signed 12-bit immediate. In the current prototype, however, `__rwpi_anchor` is
+signed 12-bit immediate. In the current prototype, however, `__gp_data_start` is
 placed at the beginning of the writable RWPI region and globals are addressed
 as positive offsets from that anchor. This means the usable direct-addressing
 range is currently about 2 KiB of RWPI globals, not the full 4 KiB signed
