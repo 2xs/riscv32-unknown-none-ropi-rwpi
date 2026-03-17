@@ -9,6 +9,23 @@ Useful links:
 - LLVM/LLD prototype branch:
   <https://github.com/GGrimaud-2XS/llvm-project/tree/riscv32-unknown-none-ropi-rwpi-proposal>
 
+## Target section naming
+
+The intended ABI naming is now:
+
+- `dataro` for true read-only data that stays in ROM
+- `dataramro` for RO-reloc data copied to RAM then treated as read-only
+- `dataramro.rel` for the runtime relocation table consumed by `crt0` for
+  `dataramro`
+- `datarw` for writable runtime data
+- `datarw.bss` for zero-initialized writable runtime data
+
+The current prototype implementation still uses some transitional ELF section
+names such as `.rodata`, `.ramro`, `.data`, and `.bss`.
+
+Those current names should be read as implementation detail. The intended ABI
+contract is the `data*` family above.
+
 ## Current prototype scope
 
 The current prototype focuses on direct RWPI accesses lowered relative to
@@ -80,12 +97,19 @@ RWPI-linked ELF to `./example.elf`.
 
 The link step uses the reference linker script
 [linker-rwpi-ramro.ld](/Users/gilles/Documents/Code/backend-riscv32-unknown-none-ropi-rwpi/linker-rwpi-ramro.ld).
-It models the intended split:
+It models the intended split using the current prototype names:
 
 - `.text` / `.rodata` in ROM
 - `.ramro` first in the `gp`-addressable RAM window
 - `.rwpi` writable initialized data after `.ramro`
 - `.rwpi.bss` as the zero-init tail of the same runtime data window
+
+In terms of the target ABI naming above, that corresponds to:
+
+- `.rodata` -> `dataro`
+- `.ramro` -> `dataramro`
+- `.rwpi` -> `datarw`
+- `.rwpi.bss` -> `datarw.bss`
 
 The script also exposes the startup-facing symbols:
 

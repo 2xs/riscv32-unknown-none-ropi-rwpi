@@ -88,6 +88,14 @@ The intended runtime image contract is:
 - RO-reloc is copied into a separate RAM read-only region, relocated there by
   startup code, then left read-only if the platform can enforce that policy
 
+The intended ABI naming for those runtime classes is:
+
+- `dataro`
+- `dataramro`
+- `dataramro.rel`
+- `datarw`
+- `datarw.bss`
+
 This means the distinction between RWPI and RO-reloc is not about how code
 addresses them. Both are expected to use the same `gp`-relative discipline in
 generated code. The distinction is about final placement, relocation handling,
@@ -101,6 +109,10 @@ The current prototype now has a concrete intermediate materialization:
 
 That keeps the semantic model honest while giving the linker and startup code a
 real section contract to target.
+
+For now, the implementation still uses transitional ELF names like `.ramro`,
+`.data`, and `.bss`. The long-term ABI naming should converge on the `data*`
+family above.
 
 The classification rules should therefore be read as translation rules:
 
@@ -268,14 +280,15 @@ The expected impact is:
 
 - the backend needs a stable input-section convention for RO-reloc data
 - the current prototype uses `.ramro` for that role
-- the target ABI intent is a distinct logical `ramro` class
+- the target ABI intent is a distinct `dataramro` class plus a
+  `dataramro.rel` relocation table
 
 2. Linker script / output section policy
 
 - the linker must place true ROPI in flash / ROM output sections
 - the linker must place RWPI in writable RAM data output sections
 - the linker must place RO-reloc in a distinct RAM read-only output section,
-  conceptually `ramro`
+  conceptually `dataramro`
 - that output section should remain within the `gp`-addressable runtime data
   window if the ABI continues to require `gp` access for both RWPI and RO-reloc
 

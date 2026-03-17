@@ -114,13 +114,21 @@ The intended runtime memory contract is therefore:
 - RO-reloc is copied into a distinct RAM read-only region, relocated there, and
   then left read-only for the program
 
+The intended ABI section naming for those classes is:
+
+- `dataro` for true ROPI data
+- `dataramro` for RO-reloc data
+- `dataramro.rel` for the runtime relocation table applied to `dataramro`
+- `datarw` for writable runtime data
+- `datarw.bss` for zero-initialized writable runtime data
+
 This implies that RO-reloc and RWPI share the same `gp`-relative addressing
 discipline in generated code, but not necessarily the same final memory
 protection or linker output region.
 
-The current prototype now materializes RO-reloc through a dedicated `.ramro`
-input-section convention, with the linker script expected to map it into a
-distinct RAM read-only output region in the final image.
+The current prototype still uses transitional section names such as `.ramro`,
+`.data`, and `.bss`, but the intended ABI contract is the `data*` naming
+above.
 
 ## Proposal
 
