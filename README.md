@@ -141,7 +141,7 @@ If you want to observe the generated RWPI code directly, the simplest way is to
 ask the experimental `clang` for assembly:
 
 ```sh
-./build-rwpi-moved/bin/clang -target riscv32-unknown-elf -march=rv32imac -mabi=ilp32 -frwpi -S ./experiments/rwpi_probe_plain.c -o -
+./build-rwpi-moved/bin/clang -target riscv32-unknown-elf -march=rv32imac -mabi=ilp32 -frwpi -S ./experiments/cases/rwpi_probe_plain.c -o -
 ```
 
 In the `.s` output, you should see `gp`-relative accesses built from
@@ -159,7 +159,7 @@ For RWPI object files, use the LLVM tools built in `build-rwpi-moved/bin`.
 Example:
 
 ```sh
-./build-rwpi-moved/bin/clang -target riscv32-unknown-elf -march=rv32imac -mabi=ilp32 -frwpi -c ./experiments/rwpi_probe_plain.c -o /tmp/rwpi-probe.o
+./build-rwpi-moved/bin/clang -target riscv32-unknown-elf -march=rv32imac -mabi=ilp32 -frwpi -c ./experiments/cases/rwpi_probe_plain.c -o /tmp/rwpi-probe.o
 ./build-rwpi-moved/bin/llvm-objdump -dr --no-show-raw-insn -M no-aliases /tmp/rwpi-probe.o
 ./build-rwpi-moved/bin/llvm-readobj -r /tmp/rwpi-probe.o
 ```
