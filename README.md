@@ -7,7 +7,7 @@ Useful links:
 
 - notes repository: <https://github.com/2xs/riscv32-unknown-none-ropi-rwpi>
 - LLVM/LLD prototype branch:
-  <https://github.com/GGrimaud-2XS/llvm-project/tree/riscv32-unknown-none-ropi-rwpi-proposal>
+  <https://github.com/2xs/llvm-project/tree/riscv32-unknown-none-ropi-rwpi-proposal>
 
 ## Target section naming
 
