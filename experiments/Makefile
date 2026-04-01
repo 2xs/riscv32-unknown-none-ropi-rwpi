@@ -13,7 +13,7 @@ DATA_BASES ?= 0x80010000 0x80024000
 	tools \
 	classic classic-smoke classic-matrix \
 	cpp \
-	rust rust-dyn rust-dyn-neg \
+	rust rust-dyn rust-dyn-neg rust-unknown \
 	blob blob-matrix \
 	neg-text neg-tls \
 	clean
@@ -32,6 +32,7 @@ help:
 		'  make rust          Run the minimal Rust -> llc -> RWPI QEMU demo' \
 		'  make rust-dyn      Run the Rust &dyn Trait dispatch experiment' \
 		'  make rust-dyn-neg  Alias for make rust-dyn' \
+		'  make rust-unknown  Show that current Rust lowering does not expose this pattern as an ambiguous external-constant case' \
 		'  make blob          Run the house blob smoke test' \
 		'  make blob-matrix   Run the house blob relocation matrix' \
 		'  make neg-text      Check that relocated text is rejected cleanly' \
@@ -68,6 +69,9 @@ rust-dyn:
 	@cd $(ROOT) && QEMU="$(QEMU)" bash "$(RUST)/run_rust_dyn_negative.sh"
 
 rust-dyn-neg: rust-dyn
+
+rust-unknown:
+	@cd $(ROOT) && bash "$(RUST)/run_rust_unknown_segment.sh"
 
 blob:
 	@cd $(ROOT) && QEMU="$(QEMU)" DATA_BASES="$(DATA_BASES)" bash "$(BLOB)/run_blob_qemu.sh"

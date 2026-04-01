@@ -433,7 +433,7 @@ This is another strongly transferable point:
 - not hard-coded addresses,
 - not duplicated layout constants in assembly.
 
-In the current repository, the `crt0` experiment is already enough to validate:
+In the current repository, the ELF/QEMU `crt0` experiment is already enough to validate:
 
 - copied writable data,
 - zeroed BSS,
@@ -441,7 +441,12 @@ In the current repository, the `crt0` experiment is already enough to validate:
 - execution of RWPI code in QEMU.
 
 What it does not yet provide is a fully generic retained-`SHT_RELA` runtime
-relocator.
+relocator. When `.rela.dataramro` is non-empty, that `crt0` currently stops
+explicitly instead of claiming to have applied the relocations.
+
+The repository also contains a separate "house blob" experiment, which does
+exercise a real post-copy relocation loop, but through a compact custom
+runtime relocation table rather than retained ELF `SHT_RELA` records.
 
 ## 10. Validation must happen at every stage of the chain
 
@@ -528,6 +533,12 @@ The current prototype already demonstrates the following successfully:
 - startup code sufficient for fixed linked images,
 - end-to-end execution in QEMU with the runtime data base moved to different
   RAM addresses.
+
+The Rust experiments are encouraging, but they also show an important nuance:
+the Rust source patterns tested so far do not expose the C/C++-style
+unknown-segment hard case to the backend as an ambiguous `external constant`
+reference. In the cases currently exercised, Rust lowering already presents
+those foreign/data-bearing statics as data-side.
 
 The main remaining open issue is not basic code generation anymore.
 

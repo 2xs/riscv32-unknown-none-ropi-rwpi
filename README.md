@@ -8,6 +8,13 @@ prototype label, but the current direction is no longer "new target triple
 first". The design should instead be read as a candidate code model /
 execution model for split flash/RAM bare-metal systems.
 
+The companion experiments also include some early Rust probes. They are useful
+for validating that the execution model is not limited to C, but they should
+not currently be read as proving full parity with the C/C++ unknown-segment
+story. In the Rust source patterns tested so far, current Rust lowering does
+not expose the key hard case as an ambiguous `external constant`; it is
+already presented to the backend as data-side.
+
 This direction is also close in spirit to the RISC-V ePIC proposal:
 
 - code remains PC-relative,
@@ -49,8 +56,8 @@ The intended ABI naming is now:
 
 - `dataro` for true read-only data that stays in ROM
 - `dataramro` for RO-reloc data copied to RAM then treated as read-only
-- `.rela.dataramro` for the standard ELF `SHT_RELA` relocation table consumed
-  by `crt0` for `dataramro`
+- `.rela.dataramro` for the standard ELF `SHT_RELA` relocation table
+  associated with `dataramro`
 - `datarw` for writable runtime data
 - `datarw.bss` for zero-initialized writable runtime data
 
@@ -171,7 +178,7 @@ to a custom ABI section. The linker keeps the natural ELF relocation section
 name `.rela.dataramro` when relocations are retained in the output with
 `--emit-relocs`.
 
-The intended `crt0` sequence is:
+The intended final `crt0` sequence is:
 
 1. copy `.dataramro` from `__dataramro_load_start` to `__dataramro_start`
 2. copy `.datarw` from `__datarw_load_start` to `__datarw_start`
@@ -179,6 +186,19 @@ The intended `crt0` sequence is:
 4. apply the `Elf32_Rela` entries from `.rela.dataramro` to `.dataramro`
 5. initialize `gp` from `__gp_data_start`
 6. optionally make `.dataramro` read-only once relocations and initialization are done
+
+The current ELF/QEMU `crt0` experiment in [experiments/classic/crt0.s](/Users/gilles/Documents/Code/backend-riscv32-unknown-none-ropi-rwpi/experiments/classic/crt0.s)
+does not yet implement step 4 generically. If `.rela.dataramro` is non-empty,
+it stops deliberately instead of pretending to have relocated the image.
+
+So the current repository demonstrates two different runtime states:
+
+- the classic ELF/QEMU path validates the linker/startup/data-placement
+  contract and rejects unresolved retained `SHT_RELA` runtime relocation
+  tables explicitly,
+- the house blob experiment validates an actual post-copy relocation loop,
+  but with a compact custom relocation table rather than retained ELF
+  `SHT_RELA`.
 
 If you want to observe the generated RWPI code directly, the simplest way is to
 ask the experimental `clang` for assembly:
