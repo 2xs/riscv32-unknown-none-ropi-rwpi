@@ -2,10 +2,10 @@
 set -e
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-OBJ="$(mktemp -t rwpi-reloc-matrix.o)"
-CRT0_OBJ="$(mktemp -t rwpi-crt0.o)"
-ELF="$(mktemp -t rwpi-reloc-matrix.elf)"
-LINKER_SCRIPT="$(mktemp -t linker-qemu-virt.ld)"
+OBJ="$(mktemp /tmp/rwpi-reloc-matrix.XXXXXX.o)"
+CRT0_OBJ="$(mktemp /tmp/rwpi-crt0.XXXXXX.o)"
+ELF="$(mktemp /tmp/rwpi-reloc-matrix.XXXXXX.elf)"
+LINKER_SCRIPT="$(mktemp /tmp/linker-qemu-virt.XXXXXX.ld)"
 RAM_BASES="${RAM_BASES:-0x80010000 0x80024000}"
 QEMU="${QEMU:-/opt/homebrew/bin/qemu-system-riscv32}"
 

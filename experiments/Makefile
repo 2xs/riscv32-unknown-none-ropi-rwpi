@@ -22,8 +22,8 @@ help:
 		'' \
 		'Targets:' \
 		'  make build         Build the LLVM tools used by the experiments' \
-		'  make run           Run the main classic and blob test campaigns' \
-		'  make classic       Run the existing ELF-based regression campaign' \
+		'  make run           Run the smoke test, classic campaign, and blob campaigns' \
+		'  make classic       Run the full ELF-based regression campaign (includes classic-matrix)' \
 		'  make classic-smoke Run the semihosting startup smoke test' \
 		'  make classic-matrix Run the ELF relocation matrix under QEMU' \
 		'  make rust          Run the minimal Rust -> llc -> RWPI QEMU demo' \
