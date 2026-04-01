@@ -5,12 +5,14 @@ EXPERIMENTS := $(ROOT)/experiments
 CLASSIC := $(EXPERIMENTS)/classic
 BLOB := $(EXPERIMENTS)/blob
 RUST := $(EXPERIMENTS)/rust
+CPP := $(EXPERIMENTS)/cpp
 QEMU ?= /opt/homebrew/bin/qemu-system-riscv32
 DATA_BASES ?= 0x80010000 0x80024000
 
 .PHONY: help build run \
 	tools \
 	classic classic-smoke classic-matrix \
+	cpp \
 	rust rust-dyn rust-dyn-neg \
 	blob blob-matrix \
 	neg-text neg-tls \
@@ -26,6 +28,7 @@ help:
 		'  make classic       Run the full ELF-based regression campaign (includes classic-matrix)' \
 		'  make classic-smoke Run the semihosting startup smoke test' \
 		'  make classic-matrix Run the ELF relocation matrix under QEMU' \
+		'  make cpp           Check the C++ unknown-segment examples through final link' \
 		'  make rust          Run the minimal Rust -> llc -> RWPI QEMU demo' \
 		'  make rust-dyn      Run the Rust &dyn Trait dispatch experiment' \
 		'  make rust-dyn-neg  Alias for make rust-dyn' \
@@ -54,6 +57,9 @@ classic-smoke:
 
 classic-matrix:
 	@cd $(ROOT) && QEMU="$(QEMU)" bash "$(CLASSIC)/run_reloc_matrix_qemu.sh"
+
+cpp:
+	@cd $(ROOT) && bash "$(CPP)/run_cpp_ambiguous_checks.sh"
 
 rust:
 	@cd $(ROOT) && QEMU="$(QEMU)" bash "$(RUST)/run_rust_qemu.sh"
