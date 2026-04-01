@@ -14,6 +14,82 @@ execution format:
 The text is written so that a reader could use it as a guide for reproducing
 the same design on another architecture, not only on RISC-V.
 
+One important update to the framing of the work is this:
+
+- the prototype repository still uses `riscv32-unknown-none-ropi-rwpi` as a
+  compact label,
+- but the more plausible upstream direction is now a code model / execution
+  model,
+- not a new target triple as the primary public surface.
+
+Another important update is that this work is best understood in relation to
+the RISC-V ePIC proposal.
+
+The current prototype is close to ePIC in its core execution assumptions:
+
+- code stays on the PC-relative side,
+- runtime data stays on the `gp`-relative side,
+- and data that must still be rewritten at load time does not remain in the
+  code segment even if it is logically read-only after startup.
+
+What this repository adds is mainly a different emphasis:
+
+- a bare-metal startup/runtime point of view,
+- explicit runtime data-class naming (`dataro`, `dataramro`, `datarw`),
+- and end-to-end validation of the loader/startup contract.
+
+What it still does not cover as fully as ePIC is the complete "unknown
+segment" problem, where the compiler cannot know soon enough whether the final
+symbol placement will require PC-relative or `gp`-relative treatment.
+
+## Open issue: unknown segment
+
+The strongest remaining limitation of the prototype is the handling of symbols
+whose final residence cannot be decided early enough.
+
+This matters because the execution model has two distinct addressing
+disciplines:
+
+- PC-relative for the code-side segment,
+- `gp`-relative for the runtime-data segment.
+
+For many objects, the current classification rules are already sufficient.
+But for some language-level constructs, especially in C++-like scenarios, the
+compiler may not know soon enough whether the final object will belong to the
+code-side or data-side relocation discipline.
+
+This is where the ePIC work is especially relevant. ePIC defines a canonical
+ambiguous sequence and lets the linker rewrite it into the appropriate final
+form once segment residence is known.
+
+The important consequence is that the ambiguous case should not start from a
+short low-12-only form. If a short form is chosen too early, the linker may
+later discover that the symbol actually belongs to the other side of the split
+and needs a full address materialization. That would require growing code at
+link time, which is the opposite of what relaxation machinery is meant to do.
+
+So the practical design rule is:
+
+- compiler/assembler: emit one long ambiguous form,
+- linker: decide whether the symbol is code-side or data-side,
+- linker: rewrite to the proper PC-relative or `gp`-relative form,
+- linker: then shrink the chosen form if the final displacement is small
+  enough.
+
+The present prototype does not yet apply that complete strategy from compiler
+lowering for all data references, but this is now the clearest direction for
+handling the remaining late-placement ambiguity.
+
+So the honest current status is:
+
+- the prototype validates the execution model itself,
+- it validates the `gp`-relative data path,
+- it validates the startup/runtime contract,
+- but it does not yet claim to solve the full late-placement ambiguity problem.
+
+For an eventual psABI proposal, this is likely the most important open design
+point to address explicitly.
+
 ## 1. Start from the execution model, not from the ISA
 
 The key design choice is not "use register X as a global base".
@@ -86,7 +162,7 @@ On another architecture, the first reusable lesson is therefore:
 
 ## 3. Expose a frontend surface, but keep the ABI decision backend-driven
 
-The user needs a visible way to request the profile.
+The user needs a visible way to request the execution model.
 
 In this prototype, the practical path was:
 
@@ -108,10 +184,13 @@ Why this matters:
 
 For another architecture, the recommendation is:
 
-- start with a clearly experimental frontend switch,
+- start with a clearly experimental frontend switch or code-model surface,
 - lower it to one backend-visible capability bit,
-- delay target-triple or formal ABI naming decisions until the lowering and
-  linker contract are proven.
+- delay target-triple or broader ABI naming decisions until the lowering and
+  linker contract are proven,
+- prefer a code-model-like public story if the core distinction is execution
+  format and relocation discipline rather than register width, calling
+  convention, or ISA variant.
 
 ## 4. Teach the backend to classify globals and to route them to the right addressing discipline
 

@@ -1,7 +1,41 @@
 # `riscv32-unknown-none-ropi-rwpi`
 
 Notes, RFC material, and experiments for an experimental RISC-V
-`riscv32-unknown-none-ropi-rwpi` profile.
+ROPI/RWPI execution model with `gp`-based runtime data addressing.
+
+The repository name still uses `riscv32-unknown-none-ropi-rwpi` as a compact
+prototype label, but the current direction is no longer "new target triple
+first". The design should instead be read as a candidate code model /
+execution model for split flash/RAM bare-metal systems.
+
+This direction is also close in spirit to the RISC-V ePIC proposal:
+
+- code remains PC-relative,
+- runtime data is addressed relative to `gp`,
+- data that must still be rewritten at load time does not remain in the code
+  segment,
+- and the final image is constructed by startup/runtime code.
+
+The main difference in this repository is emphasis:
+
+- the prototype is deliberately bare-metal-oriented,
+- it makes the startup/runtime contract concrete through linker-script,
+  `crt0`, QEMU, and blob-format experiments,
+- and it gives explicit names to the runtime data classes (`dataro`,
+  `dataramro`, `datarw`).
+
+What is still not covered as completely as in ePIC is the full "unknown
+segment" problem, where the compiler cannot know early enough whether a symbol
+will finally belong to the code-side or data-side relocation discipline.
+
+The intended way to tackle that case is:
+
+- do not emit a short low-12-only form too early,
+- always start from one long ambiguous form,
+- then let the linker choose, rewrite, and shrink it after final placement.
+
+So the practical rule is "long ambiguous first, linker decision later", not
+"short form first and try to grow it later".
 
 Useful links:
 
@@ -31,6 +65,15 @@ contract is the `data*` family above.
 
 The current prototype focuses on direct RWPI accesses lowered relative to
 `gp`.
+
+In current upstream-facing discussions, the most likely long-term shape is:
+
+- a code-model-style selection surface,
+- explicit object marking so the linker can reject incompatible inputs,
+- and only then, if still justified, a more formal psABI surface.
+
+In other words, this repository should not be read as evidence that a new
+target triple is necessarily the right public interface.
 
 The current compiler lowering no longer tries to choose between a short
 `gp + lo12` form and a larger out-of-range form.

@@ -1,8 +1,12 @@
-Title: RFC: RISC-V ropi-rwpi profile with gp-based runtime data addressing
+Title: RFC: RISC-V ropi-rwpi code model with gp-based runtime data addressing
 
-I would like to propose an experimental RISC-V code generation profile for
-bare-metal split flash/RAM systems, tentatively named
-`riscv32-unknown-none-ropi-rwpi`.
+I would like to propose an experimental RISC-V code model / execution model
+for bare-metal split flash/RAM systems.
+
+The repository and prototype branch still use the shorthand
+`riscv32-unknown-none-ropi-rwpi`, but that should now be read as a prototype
+label, not as a claim that the right long-term upstream surface is a new
+target triple.
 
 ## Summary
 
@@ -14,9 +18,9 @@ The target use case is an execution model where:
 - function/control-flow addresses may remain PC-relative as usual.
 
 This is different from the current standard RISC-V `gp` relaxation model. The
-goal is not linker relaxation for small data, but an ABI/profile where `gp` is
-a stable runtime data base, in the same general direction as RWPI-style code
-generation on other architectures.
+goal is not linker relaxation for small data, but a code model / execution
+model where `gp` is a stable runtime data base, in the same general direction
+as RWPI-style code generation on other architectures.
 
 ## Motivation
 
@@ -51,13 +55,28 @@ PC-relative, GOT-relative, and small-data relaxation schemes that do not
 directly provide the same split flash/RAM ABI contract.
 
 The goal of this proposal is to explore an experimental RISC-V `ropi-rwpi`
-profile where writable globals are addressed relative to a stable runtime base
-(`gp`), while code remains independently relocatable and does not require
+code model where writable globals are addressed relative to a stable runtime
+base (`gp`), while code remains independently relocatable and does not require
 runtime relocation in `.text`.
+
+This direction is close in spirit to the earlier RISC-V ePIC proposal:
+
+- code-side objects are reached through a PC-relative discipline,
+- data-side objects are reached through `gp`,
+- and data that still requires load-time rewriting must not remain in the
+  code segment even if it is logically read-only afterwards.
+
+The current prototype in this repository should therefore not be read as an
+alternative universe to ePIC, but rather as a bare-metal-oriented exploration
+of the same general execution-model family, with more emphasis on:
+
+- startup/runtime construction of the final image,
+- explicit runtime data classes (`dataro`, `dataramro`, `datarw`),
+- and end-to-end validation through linker scripts, `crt0`, and QEMU.
 
 ## RWPI/ROPI discipline
 
-The profile needs a stricter classification rule than "mutable globals are
+The execution model needs a stricter classification rule than "mutable globals are
 RWPI".
 
 The important distinction is between:
@@ -126,6 +145,13 @@ This implies that RO-reloc and RWPI share the same `gp`-relative addressing
 discipline in generated code, but not necessarily the same final memory
 protection or linker output region.
 
+This is also the point where the current prototype most clearly overlaps with
+ePIC. In ePIC terms, pointer-bearing read-only objects that still require
+load-time relocation do not remain in the code segment; they move to the data
+side so that the loader may rewrite them before execution begins. The current
+prototype makes that same distinction explicit under the `RO-reloc` /
+`dataramro` naming.
+
 The current prototype still uses some transitional writable-data section names
 such as `.data` and `.bss`, but RO-reloc data now already uses `.dataramro`.
 The intended ABI contract remains the `data*` naming above.
@@ -183,6 +209,74 @@ As a consequence:
 - the short form also remains available when written explicitly, for example
   in hand-written assembly
 
-The intent is to start with an experimental subtarget/profile and validate the
-basic ABI/codegen contract before discussing whether a target triple or a more
-formal ABI surface makes sense.
+The intent is to start with an experimental code-model-style lowering mode and
+validate the basic ABI/codegen contract before discussing the long-term
+frontend surface.
+
+Based on later feedback, the most plausible upstream-facing direction now
+looks like:
+
+- a new code model (for example through `-mcmodel=` or an equivalent backend
+  selection surface),
+- plus explicit object marking so the linker can reject incompatible mixtures,
+- rather than a new target triple or an extension to `-mabi`.
+
+One important open point, however, is that the current prototype does not yet
+cover the full "unknown segment" case as explicitly as ePIC does. In other
+words, the prototype already validates the `gp`-relative runtime-data model and
+the startup/link/runtime contract, but it does not yet claim to solve every
+case where the compiler cannot know early enough whether a symbol will finally
+belong to the code-side or data-side addressing discipline.
+
+## Open issue: unknown segment
+
+The most important remaining design issue is the "unknown segment" case.
+
+The current prototype already covers cases where the toolchain can classify
+objects early enough into:
+
+- true ROPI / code-side read-only data,
+- writable runtime data,
+- read-only but load-time-relocatable runtime data.
+
+However, there are still source-language patterns where the compiler may not be
+able to know soon enough whether the final object placement should follow the
+code-side PC-relative discipline or the data-side `gp`-relative discipline.
+
+The ePIC proposal addresses that problem explicitly by introducing
+link-time-rewrite relocations for ambiguous address-generation sequences.
+
+That is a useful reference point for this work.
+
+In practice, this implies an important implementation rule: the ambiguous case
+should not start from a short low-12-only form. If the compiler or assembler
+chooses a short form too early, the linker may later discover that the symbol
+really belongs to the other side of the split and needs a full address
+materialization instead. That would require growing code at link time, which is
+not what relaxation machinery is designed for.
+
+The more robust strategy is therefore:
+
+- always start from one canonical long ambiguous form for data references,
+- make that form valid for either PC-relative or `gp`-relative rewriting,
+- let the linker choose the final side once placement is known,
+- then let the linker shrink the chosen form when the final displacement makes
+  that possible.
+
+In short:
+
+- compiler/assembler: emit a long ambiguous form,
+- linker: choose, rewrite, and shrink if possible.
+
+The current prototype should therefore be understood as:
+
+- a validation of the execution model,
+- a validation of the runtime-data classification rule,
+- a validation of the startup/link/runtime contract,
+- but not yet a full solution to every "unknown segment" case.
+
+Any future psABI proposal derived from this work will likely need to address
+that question explicitly, either:
+
+- by adopting an ePIC-like link-time rewrite strategy,
+- or by defining a different but equally explicit late classification mechanism.
