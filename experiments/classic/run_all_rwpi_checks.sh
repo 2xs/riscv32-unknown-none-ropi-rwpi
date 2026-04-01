@@ -29,6 +29,6 @@ build-rwpi-moved/bin/llvm-lit -sv \
 
 QEMU="$QEMU" QEMU_TIMEOUT=20s experiments/classic/run_reloc_matrix_qemu.sh
 experiments/classic/check_runtime_reloc_sections.sh
-QEMU="$QEMU" bash experiments/classic/check_runtime_reloc_crash.sh
+QEMU="$QEMU" bash experiments/classic/check_runtime_reloc_apply.sh
 
 echo "All RWPI checks passed"

@@ -440,9 +440,17 @@ In the current repository, the ELF/QEMU `crt0` experiment is already enough to v
 - base-register initialization,
 - execution of RWPI code in QEMU.
 
-What it does not yet provide is a fully generic retained-`SHT_RELA` runtime
-relocator. When `.rela.dataramro` is non-empty, that `crt0` currently stops
-explicitly instead of claiming to have applied the relocations.
+It now also provides a deliberately small retained-`SHT_RELA` runtime
+relocator for the bare-metal experiments:
+
+- retained `.rela.dataramro` and `.rela.datarw` are consumed at startup,
+- only `R_RISCV_32` is supported,
+- patched words are rebased by range, using the linked data-window bounds to
+  detect data-side pointers and leaving text/ROM-side pointers unchanged unless
+  a text delta is configured explicitly.
+
+This is still not a fully generic retained-ELF runtime relocation engine, but
+it is enough to exercise the intended startup policy with a standard ELF image.
 
 The repository also contains a separate "house blob" experiment, which does
 exercise a real post-copy relocation loop, but through a compact custom

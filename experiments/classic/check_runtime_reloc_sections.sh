@@ -50,10 +50,12 @@ rg -q 'R_RISCV_32 fn0' "$RELOCS_OBJ"
 "$ROOT/build-rwpi-moved/bin/llvm-readobj" --symbols "$ELF" > "$SYMS_ELF"
 
 rg -q 'Name: \.rela\.dataramro' "$RELOCS_ELF"
+rg -q 'Name: \.rela\.datarw' "$RELOCS_ELF"
 rg -q 'Name: \.rela\.text' "$RELOCS_ELF"
 rg -q 'R_RISCV_32 target_a' "$RELOCS_ELF"
 rg -q 'R_RISCV_32 fn0' "$RELOCS_ELF"
 rg -q 'Name: __rela_dataramro_start' "$SYMS_ELF"
+rg -q 'Name: __rela_datarw_start' "$SYMS_ELF"
 rg -q 'Value: 0x[1-9A-Fa-f][0-9A-Fa-f]*' "$SYMS_ELF"
 python3 - <<'PY' "$SYMS_ELF"
 import re
@@ -73,15 +75,23 @@ if not start:
     raise SystemExit("__rela_dataramro_start is zero")
 if end <= start:
     raise SystemExit("__rela_dataramro_end does not extend past start")
+
+start = value("__rela_datarw_start")
+end = value("__rela_datarw_end")
+if not start:
+    raise SystemExit("__rela_datarw_start is zero")
+if end <= start:
+    raise SystemExit("__rela_datarw_end does not extend past start")
 PY
 python3 - <<'PY' "$RELOCS_ELF"
 import re
 import sys
 
 text = open(sys.argv[1], "r", encoding="utf-8").read()
-m = re.search(r"Name: \.rela\.dataramro.*?Flags \[ \((.*?)\)\n(.*?)\n    \]", text, re.S)
-if not m or "SHF_ALLOC" not in m.group(2):
-    raise SystemExit(".rela.dataramro is not allocatable in the final ELF")
+for name in (".rela.dataramro", ".rela.datarw"):
+    m = re.search(rf"Name: {re.escape(name)}.*?Flags \[ \((.*?)\)\n(.*?)\n    \]", text, re.S)
+    if not m or "SHF_ALLOC" not in m.group(2):
+        raise SystemExit(f"{name} is not allocatable in the final ELF")
 PY
 
 echo "Relocation section checks OK"

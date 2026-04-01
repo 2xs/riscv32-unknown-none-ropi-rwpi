@@ -7,12 +7,16 @@ MEMORY {
 
 SECTIONS {
   .text : {
+    __text_start = .;
     *(.text .text.*)
+    __text_end = .;
   } > ROM
 
   .dataro : {
+    __dataro_start = .;
     *(.rodata .rodata.*)
     *(.srodata .srodata.*)
+    __dataro_end = .;
   } > ROM
 
   __gp_data_start = ORIGIN(RAM);
@@ -47,13 +51,19 @@ SECTIONS {
     __datarw_bss_end = .;
   } > RAM
 
+  __gp_data_end = .;
+
   .rela.dataramro : {
     *(.rela.dataramro .rela.dataramro.*)
   } > ROM
   __rela_dataramro_start = ADDR(.rela.dataramro);
   __rela_dataramro_end = ADDR(.rela.dataramro) + SIZEOF(.rela.dataramro);
 
-  __gp_data_end = .;
+  .rela.datarw : {
+    *(.rela.datarw .rela.datarw.*)
+  } > ROM
+  __rela_datarw_start = ADDR(.rela.datarw);
+  __rela_datarw_end = ADDR(.rela.datarw) + SIZEOF(.rela.datarw);
 
   /DISCARD/ : {
     *(.note.GNU-stack)

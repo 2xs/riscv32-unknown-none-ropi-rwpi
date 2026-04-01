@@ -4,18 +4,27 @@ set -e
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OBJ="$(mktemp /tmp/rwpi-reloc-crash.XXXXXX.o)"
 CRT0_OBJ="$(mktemp /tmp/rwpi-reloc-crash.XXXXXX.crt0.o)"
+CRT0_SRC="$(mktemp /tmp/rwpi-reloc-crash.XXXXXX.crt0.s)"
 ELF="$(mktemp /tmp/rwpi-reloc-crash.XXXXXX.elf)"
 QEMU="${QEMU:-/opt/homebrew/bin/qemu-system-riscv32}"
+DATA_RUNTIME_BASE="${DATA_RUNTIME_BASE:-0x80024000}"
+STACK_RUNTIME_TOP="${STACK_RUNTIME_TOP:-0x8003F000}"
 
-trap 'rm -f "$OBJ" "$CRT0_OBJ" "$ELF"' EXIT
+trap 'rm -f "$OBJ" "$CRT0_OBJ" "$CRT0_SRC" "$ELF"' EXIT
 
 "$ROOT/build-llvm.sh"
+
+{
+  printf '.set DATA_RUNTIME_BASE, %s\n' "$DATA_RUNTIME_BASE"
+  printf '.set STACK_RUNTIME_TOP, %s\n' "$STACK_RUNTIME_TOP"
+  cat "$ROOT/experiments/classic/crt0.s"
+} > "$CRT0_SRC"
 
 "$ROOT/build-rwpi-moved/bin/clang" \
   --target=riscv32-unknown-elf \
   -march=rv32imac \
   -mabi=ilp32 \
-  -c "$ROOT/experiments/classic/crt0.s" \
+  -c "$CRT0_SRC" \
   -o "$CRT0_OBJ"
 
 "$ROOT/build-rwpi-moved/bin/clang" \
@@ -36,28 +45,13 @@ trap 'rm -f "$OBJ" "$CRT0_OBJ" "$ELF"' EXIT
   "$OBJ" \
   -o "$ELF"
 
-set +e
-OUTPUT="$(
-  timeout 5s "$QEMU" \
-    -machine virt \
-    -bios none \
-    -nographic \
-    -semihosting \
-    -kernel "$ELF" 2>&1
-)"
-STATUS=$?
-set -e
+echo "Running runtime relocation check with DATA_RUNTIME_BASE = $DATA_RUNTIME_BASE"
 
-if [ "$STATUS" -ne 124 ]; then
-  printf '%s\n' "$OUTPUT"
-  echo "expected QEMU to time out inside crt0 when .rela.dataramro is non-empty" >&2
-  exit 1
-fi
+"$QEMU" \
+  -machine virt \
+  -bios none \
+  -nographic \
+  -semihosting-config enable=on,target=native \
+  -kernel "$ELF"
 
-if printf '%s' "$OUTPUT" | rg -q 'RWPI relocation matrix OK'; then
-  printf '%s\n' "$OUTPUT"
-  echo "program unexpectedly reached main without applying runtime relocations" >&2
-  exit 1
-fi
-
-echo "Runtime relocation absence blocks execution as expected"
+echo "Runtime relocation loop applied retained R_RISCV_32 entries as expected"

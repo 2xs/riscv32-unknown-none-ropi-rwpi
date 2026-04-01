@@ -156,10 +156,10 @@ The current prototype still uses some transitional writable-data section names
 such as `.data` and `.bss`, but RO-reloc data now already uses `.dataramro`.
 The intended ABI contract remains the `data*` naming above.
 
-For the relocation table associated with `dataramro`, the current direction is
-to keep the standard ELF relocation-section naming and format. In other words,
-the runtime relocation table is `.rela.dataramro`, with ordinary `SHT_RELA`
-entries retained in the output when linking with `--emit-relocs`.
+For retained runtime relocation tables, the current direction is to keep the
+standard ELF relocation-section naming and format. In other words, the runtime
+relocation tables are `.rela.dataramro` and `.rela.datarw`, with ordinary
+`SHT_RELA` entries retained in the output when linking with `--emit-relocs`.
 
 ## Proposal
 

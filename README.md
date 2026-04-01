@@ -56,9 +56,11 @@ The intended ABI naming is now:
 
 - `dataro` for true read-only data that stays in ROM
 - `dataramro` for RO-reloc data copied to RAM then treated as read-only
-- `.rela.dataramro` for the standard ELF `SHT_RELA` relocation table
+- `.rela.dataramro` for retained standard ELF `SHT_RELA` relocations
   associated with `dataramro`
 - `datarw` for writable runtime data
+- `.rela.datarw` for retained standard ELF `SHT_RELA` relocations associated
+  with `datarw`
 - `datarw.bss` for zero-initialized writable runtime data
 
 The current prototype implementation still uses some transitional ELF section
@@ -173,29 +175,37 @@ The script also exposes the startup-facing symbols:
 window. It does not rely on a synthetic object being emitted by the input
 files.
 
-For RO-reloc contents, the associated runtime relocation table is not renamed
-to a custom ABI section. The linker keeps the natural ELF relocation section
-name `.rela.dataramro` when relocations are retained in the output with
-`--emit-relocs`.
+For retained runtime relocations, the prototype keeps the natural ELF
+relocation section names rather than renaming them to a custom ABI section.
+The classic ELF/QEMU path currently uses `.rela.dataramro` and `.rela.datarw`
+when relocations are retained in the output with `--emit-relocs`.
 
 The intended final `crt0` sequence is:
 
 1. copy `.dataramro` from `__dataramro_load_start` to `__dataramro_start`
 2. copy `.datarw` from `__datarw_load_start` to `__datarw_start`
 3. zero `.datarw.bss`
-4. apply the `Elf32_Rela` entries from `.rela.dataramro` to `.dataramro`
+4. apply the retained `Elf32_Rela` entries to the copied runtime data
 5. initialize `gp` from `__gp_data_start`
 6. optionally make `.dataramro` read-only once relocations and initialization are done
 
 The current ELF/QEMU `crt0` experiment in [experiments/classic/crt0.s](/Users/gilles/Documents/Code/backend-riscv32-unknown-none-ropi-rwpi/experiments/classic/crt0.s)
-does not yet implement step 4 generically. If `.rela.dataramro` is non-empty,
-it stops deliberately instead of pretending to have relocated the image.
+implements a deliberately small runtime relocation policy:
+
+- it consumes retained `.rela.dataramro` and `.rela.datarw`,
+- it only supports `R_RISCV_32`,
+- it rebiases pointer-bearing words by range, adding the data-window delta for
+  values in the linked data window and preserving text/ROM-side values unless a
+  text delta is explicitly configured.
+
+This is enough for the current bare-metal experiments, but it is still not a
+fully generic retained-ELF relocation runtime.
 
 So the current repository demonstrates two different runtime states:
 
 - the classic ELF/QEMU path validates the linker/startup/data-placement
-  contract and rejects unresolved retained `SHT_RELA` runtime relocation
-  tables explicitly,
+  contract and also applies a restricted retained-`SHT_RELA` runtime
+  relocation policy for `R_RISCV_32`,
 - the house blob experiment validates an actual post-copy relocation loop,
   but with a compact custom relocation table rather than retained ELF
   `SHT_RELA`.
