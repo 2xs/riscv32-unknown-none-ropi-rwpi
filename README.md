@@ -1,12 +1,21 @@
 # `riscv32-unknown-none-ropi-rwpi`
 
-Notes, RFC material, and experiments for an experimental RISC-V
-ROPI/RWPI execution model with `gp`-based runtime data addressing.
+Notes, RFC material, and experiments for an experimental RISC-V code model /
+execution model with `gp`-based runtime data addressing.
 
 The repository name still uses `riscv32-unknown-none-ropi-rwpi` as a compact
 prototype label, but the current direction is no longer "new target triple
 first". The design should instead be read as a candidate code model /
 execution model for split flash/RAM bare-metal systems.
+
+The original ROPI/RWPI terminology is kept mostly as historical shorthand,
+because the first goal was to find a practical RISC-V analogue to the existing
+ARM embedded models. For ABI discussion, however, the more useful split is
+often "shareable" vs "isolated" data:
+
+- `dataro` is shareable read-only data,
+- `dataramro` is isolated read-only-after-init data,
+- `datarw` and `datarw.bss` are isolated writable runtime data.
 
 The companion experiments also include some early Rust probes. They are useful
 for validating that the execution model is not limited to C, but they should
@@ -31,18 +40,28 @@ The main difference in this repository is emphasis:
 - and it gives explicit names to the runtime data classes (`dataro`,
   `dataramro`, `datarw`).
 
-What is still not covered as completely as in ePIC is the full "unknown
-segment" problem, where the compiler cannot know early enough whether a symbol
-will finally belong to the code-side or data-side relocation discipline.
+The prototype already contains an experimental linker-side mechanism for the
+"unknown segment" problem, i.e. the case where the compiler cannot know early
+enough whether a symbol will finally belong to the code-side or data-side
+relocation discipline.
 
-The intended way to tackle that case is:
+The implemented strategy is:
 
-- do not emit a short low-12-only form too early,
-- always start from one long ambiguous form,
-- then let the linker choose, rewrite, and shrink it after final placement.
+- code generation emits one long ambiguous form,
+- the linker looks at the symbol's final placement,
+- it rewrites the sequence as code-side or data-side accordingly,
+- and then shrinks it if a shorter final form is possible.
 
 So the practical rule is "long ambiguous first, linker decision later", not
 "short form first and try to grow it later".
+
+What is still open is not whether such a mechanism exists in the prototype,
+but what the right conservative policy should be for a maintainable psABI /
+code-model definition:
+
+- how much should be classified conservatively up front,
+- how much should rely on delayed linker choice,
+- and which objects should default to isolated placement.
 
 Useful links:
 
@@ -69,6 +88,38 @@ uses `.dataramro`.
 
 Those current names should be read as implementation detail. The intended ABI
 contract is the `data*` family above.
+
+## Positioning
+
+This prototype is closer to ePIC than to FDPIC.
+
+The main design goal is XIP-friendly execution:
+
+- code stays in flash/ROM,
+- executable read-only memory should not require in-place runtime rewriting,
+- startup is limited to preparing runtime data elsewhere.
+
+In practice that means:
+
+- copy writable runtime data to RAM,
+- relocate pointer-bearing runtime data,
+- initialize the dedicated data-base register,
+- then execute directly from non-volatile memory.
+
+This is not a full NOMMU ELF loader model. In particular, the current scope
+does not try to cover PLT, TLS, preemptible symbols, function descriptors, or
+the general shared-object case addressed by FDPIC.
+
+Compiler analyses may improve later and reduce annotation burden, but the model
+should not depend on sophisticated whole-program reasoning for correctness.
+The intended order is:
+
+- correctness from a simple conservative rule,
+- better placement from improved analyses later.
+
+For broader background on MMU-less ELF and FDPIC design tradeoffs, see
+MaskRay's article:
+<https://maskray.me/blog/2024-02-20-mmu-less-systems-and-fdpic>
 
 ## Current prototype scope
 

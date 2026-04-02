@@ -542,20 +542,48 @@ The current prototype already demonstrates the following successfully:
 - end-to-end execution in QEMU with the runtime data base moved to different
   RAM addresses.
 
+One point deserves to be stated explicitly: the prototype already implements an
+experimental linker-side unknown-segment mechanism.
+
+For the source patterns that reach that path:
+
+- code generation emits one long ambiguous form,
+- the linker inspects the symbol's final placement,
+- it rewrites the sequence as code-side or data-side accordingly,
+- and then shrinks it when a shorter final form is possible.
+
+So the remaining open issue is not whether delayed linker-side choice exists in
+the prototype. The open issue is which conservative policy should define when
+that mechanism is needed in a maintainable psABI / code-model specification.
+
+That policy discussion includes:
+
+- whether pointer-bearing read-only data should default to isolated placement,
+- how much should be classified conservatively up front,
+- how much should rely on delayed linker-side choice,
+- and how much annotation burden should be accepted.
+
 The Rust experiments are encouraging, but they also show an important nuance:
 the Rust source patterns tested so far do not expose the C/C++-style
 unknown-segment hard case to the backend as an ambiguous `external constant`
 reference. In the cases currently exercised, Rust lowering already presents
 those foreign/data-bearing statics as data-side.
 
-The main remaining open issue is not basic code generation anymore.
+Compiler analyses may improve later and reduce user annotation burden,
+especially in languages with richer semantic information than C/C++. However,
+the model should not depend on sophisticated analysis for correctness. The
+intended shape is:
 
-It is the final runtime relocation contract for retained `.rela.dataramro`
-tables when the startup code must perform generic post-link relocation from the
-ELF relocation records themselves.
+- correctness from a simple conservative rule first,
+- better placement and fewer annotations from improved analyses later.
 
-That should be treated as the next design step, not as a detail to be filled in
-later.
+The main remaining open issue is therefore no longer basic code generation.
+
+It is the combination of:
+
+- the conservative default placement policy for ambiguous objects,
+- and the final runtime relocation contract for retained ELF relocation tables
+  when startup code must perform post-link relocation from those records.
 
 ## 13. Recommended order for anyone reproducing this on another architecture
 
